@@ -50,6 +50,23 @@ export async function fetchPlayerRankings(format: 'half_ppr' | 'ppr' | 'standard
   return res.json();
 }
 
+export interface YahooPlayerValue {
+  playerName: string;
+  firstName: string;
+  lastName: string;
+  position: string;
+  team: string;
+  averageCost: number | null;
+  averagePick: number | null;
+  percentDrafted: number | null;
+}
+
+export async function fetchYahooPlayerValues(): Promise<YahooPlayerValue[]> {
+  const res = await fetch(`${BASE}/yahoo/player-values`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function updateLeagueScoringSettings(leagueId: string, scoringSettings: ScoringSettings): Promise<League> {
   const res = await fetch(`${BASE}/leagues/${leagueId}`, {
     method: 'PUT',

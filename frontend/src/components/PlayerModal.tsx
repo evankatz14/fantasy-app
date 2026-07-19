@@ -5,7 +5,8 @@ import { calcCustomPpg, calcCustomWeekPts } from '../utils/scoring';
 import { useAppStore } from '../store/useAppStore';
 import { POSITION_COLORS } from './PositionFilter';
 import { usePlayerRankings } from '../hooks/usePlayerRankings';
-import { computeAuctionValues } from '../utils/auctionValues';
+import { computeAuctionValues, matchYahooValues } from '../utils/auctionValues';
+import { useYahooPlayerValues } from '../hooks/useYahooPlayerValues';
 
 interface Props {
   player: Player;
@@ -325,12 +326,13 @@ const SCORING_LABELS: Record<ScoringFormat, string> = {
 
 // ── Auction price editor ───────────────────────────────────────────────────
 
-function AuctionSection({ playerId, leagueId, leagueName, budget, auctionValue }: {
+function AuctionSection({ playerId, leagueId, leagueName, budget, auctionValue, yahooAav }: {
   playerId: string;
   leagueId: string;
   leagueName: string;
   budget?: number;
   auctionValue?: number | null;
+  yahooAav?: number | null;
 }) {
   const { auctionPrices, setAuctionPrice } = useAppStore();
   const saved = auctionPrices[leagueId]?.[playerId];
@@ -353,11 +355,20 @@ function AuctionSection({ playerId, leagueId, leagueName, budget, auctionValue }
 
   return (
     <div className="flex flex-col gap-3">
-      {auctionValue != null && (
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-slate-500">Est. value</span>
-          <span className="text-sm font-semibold text-indigo-400">${auctionValue}</span>
-          <span className="text-xs text-slate-600">PAR + ECR blend</span>
+      {(yahooAav != null || auctionValue != null) && (
+        <div className="flex items-center gap-4">
+          {yahooAav != null && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-500">Yahoo avg</span>
+              <span className="text-sm font-semibold text-purple-400">${yahooAav.toFixed(1)}</span>
+            </div>
+          )}
+          {auctionValue != null && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-500">{yahooAav != null ? 'Adj. value' : 'Est. value'}</span>
+              <span className="text-sm font-semibold text-indigo-400">${auctionValue}</span>
+            </div>
+          )}
         </div>
       )}
     <div className="flex items-center gap-4">
@@ -414,12 +425,20 @@ export function PlayerModal({ player, scoringFormat, scoringSettings, onClose }:
   const { activeLeagueId, leagues, players: allPlayers, stats: allStats } = useAppStore();
   const activeLeague = leagues.find(l => l.id === activeLeagueId);
   const rankings = usePlayerRankings(scoringFormat);
+  const { values: yahooRaw, authenticated: yahooAuthed } = useYahooPlayerValues();
+
+  const yahooMatched = useMemo(
+    () => matchYahooValues(yahooRaw, allPlayers),
+    [yahooRaw, allPlayers],
+  );
 
   const auctionValues = useMemo(
-    () => computeAuctionValues(allPlayers, allStats, scoringFormat, rankings),
-    [allPlayers, allStats, scoringFormat, rankings],
+    () => computeAuctionValues(allPlayers, allStats, scoringFormat, rankings, yahooMatched),
+    [allPlayers, allStats, scoringFormat, rankings, yahooMatched],
   );
   const auctionValue = auctionValues[player.id] ?? null;
+  // Show raw Yahoo AAV when available (before normalization)
+  const yahooAav = yahooMatched[player.id] ?? null;
 
   const [seasons, setSeasons] = useState<PlayerSeasonStats[] | null>(null);
   const [seasonError, setSeasonError] = useState(false);
@@ -554,6 +573,7 @@ export function PlayerModal({ player, scoringFormat, scoringSettings, onClose }:
               leagueName={activeLeague.name}
               budget={activeLeague.auctionBudget}
               auctionValue={auctionValue}
+              yahooAav={yahooAav}
             />
           </div>
         )}

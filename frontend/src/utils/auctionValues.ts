@@ -1,5 +1,5 @@
 import type { Player, PlayerSeasonStats, ScoringFormat } from '../types';
-import type { PlayerRanking } from '../api';
+import type { PlayerRanking, YahooPlayerValue } from '../api';
 
 // ── Name normalization (must match backend logic) ─────────────────────────────
 
@@ -111,6 +111,34 @@ function rankToDollar(rank: number, maxPAR: number): number {
 // ── Main export ───────────────────────────────────────────────────────────────
 
 /**
+ * Matches Yahoo player values to Sleeper player IDs by name + position.
+ * Returns Record<playerId, averageCost> for players with a non-null averageCost.
+ */
+export function matchYahooValues(
+  yahooValues: YahooPlayerValue[],
+  players: Player[],
+): Record<string, number> {
+  const lookup = new Map<string, number>();
+  for (const y of yahooValues) {
+    if (y.averageCost == null) continue;
+    lookup.set(matchKey(y.firstName, y.lastName, y.position), y.averageCost);
+  }
+
+  const result: Record<string, number> = {};
+  let matched = 0;
+  for (const player of players) {
+    const { first, last } = splitNorm(player.fullName);
+    const cost = lookup.get(matchKey(first, last, player.position));
+    if (cost != null) {
+      result[player.id] = cost;
+      matched++;
+    }
+  }
+  console.log(`[auctionValues] Yahoo matched ${matched}/${players.length} players`);
+  return result;
+}
+
+/**
  * Computes blended auction values:
  *   - For players with 2025 stats: 60% PAR + 40% ECR rank value
  *   - For rookies / no-stat players with ECR rank: 100% rank value
@@ -122,6 +150,7 @@ export function computeAuctionValues(
   stats: Record<string, PlayerSeasonStats>,
   scoringFormat: ScoringFormat = 'half_ppr',
   rankings: PlayerRanking[] = [],
+  yahooValues: Record<string, number> = {},
 ): Record<string, number> {
   // Step 1: PAR values (raw, un-floored dollars)
   const parRaw = computePAR(players, stats, scoringFormat);
@@ -165,6 +194,11 @@ export function computeAuctionValues(
     // Players with neither PAR nor ECR rank are excluded (get no value)
   }
 
-  // Step 4: Normalize so max value = $61, floor at $1
+  // Step 4: Override with Yahoo values where available (real auction market data)
+  for (const [id, cost] of Object.entries(yahooValues)) {
+    blended[id] = cost;
+  }
+
+  // Step 5: Normalize so max value = $61, floor at $1
   return normalizeToMax(blended, MAX_AUCTION_VALUE);
 }

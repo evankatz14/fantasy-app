@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuctionStore, HUMAN_TEAM_ID } from '../../store/useAuctionStore';
-import { computeAuctionValues } from '../../utils/auctionValues';
-import { fetchPlayerRankings } from '../../api';
+import { computeAuctionValues, matchYahooValues } from '../../utils/auctionValues';
+import { fetchPlayerRankings, fetchYahooPlayerValues } from '../../api';
 import { getAIBid, maxBid, PERSONALITY_DELAY } from '../../utils/auctionAI';
 import type { AIPersonality } from '../../utils/auctionAI';
 import { BiddingPanel } from './BiddingPanel';
@@ -56,15 +56,17 @@ export function AuctionRoom({ onBack }: Props) {
       .filter(p => ELIGIBLE_POSITIONS.has(p.position))
       .map(p => p.id);
 
-    // Fetch ECR rankings; blend with PAR inside computeAuctionValues
-    let rankings: Awaited<ReturnType<typeof fetchPlayerRankings>> = [];
-    try {
-      rankings = await fetchPlayerRankings(scoringFormat);
-    } catch {
-      // fall through with PAR-only
-    }
+    // Fetch ECR rankings and Yahoo values in parallel
+    const [rankings, yahooRaw] = await Promise.allSettled([
+      fetchPlayerRankings(scoringFormat),
+      fetchYahooPlayerValues(),
+    ]);
 
-    const values = computeAuctionValues(players, stats, scoringFormat, rankings);
+    const resolvedRankings = rankings.status === 'fulfilled' ? rankings.value : [];
+    const resolvedYahoo = yahooRaw.status === 'fulfilled' ? yahooRaw.value : [];
+    const yahooMatched = matchYahooValues(resolvedYahoo, players);
+
+    const values = computeAuctionValues(players, stats, scoringFormat, resolvedRankings, yahooMatched);
     startAuction(playerIds, values);
     useAuctionStore.getState().doNominate(players);
   }
