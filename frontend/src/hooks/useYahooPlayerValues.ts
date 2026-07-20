@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { fetchYahooPlayerValues, YahooPlayerValue } from '../api';
+import { fetchYahooPlayerValues } from '../api';
+import type { YahooPlayerValue } from '../api';
 
 let _cached: YahooPlayerValue[] | null = null;
 let _pending: Promise<YahooPlayerValue[]> | null = null;
