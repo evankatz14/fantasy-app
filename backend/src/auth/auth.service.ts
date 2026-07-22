@@ -20,7 +20,6 @@ export class AuthService {
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
       response_type: 'code',
-      scope: 'fspt-r',
     });
     return `https://api.login.yahoo.com/oauth2/request_auth?${params}`;
   }
