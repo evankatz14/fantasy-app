@@ -1,5 +1,5 @@
 import type { Player, PlayerSeasonStats, ScoringFormat } from '../types';
-import type { PlayerRanking, YahooPlayerValue } from '../api';
+import type { PlayerRanking } from '../api';
 import { MANUAL_AUCTION_VALUES } from '../data/manualAuctionValues';
 
 // ── Name normalization (must match backend logic) ─────────────────────────────
@@ -140,34 +140,6 @@ function matchManualValues(players: Player[]): Record<string, number> {
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-
-/**
- * Matches Yahoo player values to Sleeper player IDs by name + position.
- * Returns Record<playerId, averageCost> for players with a non-null averageCost.
- */
-export function matchYahooValues(
-  yahooValues: YahooPlayerValue[],
-  players: Player[],
-): Record<string, number> {
-  const lookup = new Map<string, number>();
-  for (const y of yahooValues) {
-    if (y.averageCost == null) continue;
-    lookup.set(matchKey(y.firstName, y.lastName, y.position), y.averageCost);
-  }
-
-  const result: Record<string, number> = {};
-  let matched = 0;
-  for (const player of players) {
-    const { first, last } = splitNorm(player.fullName);
-    const cost = lookup.get(matchKey(first, last, player.position));
-    if (cost != null) {
-      result[player.id] = cost;
-      matched++;
-    }
-  }
-  console.log(`[auctionValues] Yahoo matched ${matched}/${players.length} players`);
-  return result;
-}
 
 /**
  * Computes blended auction values:
