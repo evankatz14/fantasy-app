@@ -1,5 +1,6 @@
 import type { Player, PlayerSeasonStats, ScoringFormat } from '../types';
 import type { PlayerRanking, YahooPlayerValue } from '../api';
+import { MANUAL_AUCTION_VALUES } from '../data/manualAuctionValues';
 
 // ── Name normalization (must match backend logic) ─────────────────────────────
 
@@ -108,6 +109,36 @@ function rankToDollar(rank: number, maxPAR: number): number {
   return maxPAR / Math.pow(rank, 0.6);
 }
 
+// ── Manual auction value matching ─────────────────────────────────────────────
+
+function matchManualValues(players: Player[]): Record<string, number> {
+  const nameLookup = new Map<string, number>();
+  const defLookup = new Map<string, number>(); // team abbrev → value
+
+  for (const entry of MANUAL_AUCTION_VALUES) {
+    if (entry.position === 'DEF') {
+      defLookup.set(entry.team, entry.value);
+    } else {
+      const { first, last } = splitNorm(entry.name);
+      nameLookup.set(matchKey(first, last, entry.position), entry.value);
+    }
+  }
+
+  const result: Record<string, number> = {};
+  for (const player of players) {
+    if (player.position === 'DEF') {
+      const v = defLookup.get(player.team);
+      if (v !== undefined) result[player.id] = Math.max(1, v);
+    } else {
+      const { first, last } = splitNorm(player.fullName);
+      const v = nameLookup.get(matchKey(first, last, player.position));
+      if (v !== undefined) result[player.id] = Math.max(1, v);
+    }
+  }
+
+  return result;
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 /**
@@ -147,58 +178,25 @@ export function matchYahooValues(
  */
 export function computeAuctionValues(
   players: Player[],
-  stats: Record<string, PlayerSeasonStats>,
-  scoringFormat: ScoringFormat = 'half_ppr',
-  rankings: PlayerRanking[] = [],
+  _stats: Record<string, PlayerSeasonStats>,
+  _scoringFormat: ScoringFormat = 'half_ppr',
+  _rankings: PlayerRanking[] = [],
   yahooValues: Record<string, number> = {},
 ): Record<string, number> {
-  // Step 1: PAR values (raw, un-floored dollars)
-  const parRaw = computePAR(players, stats, scoringFormat);
-  const maxPAR = Math.max(1, ...Object.values(parRaw));
+  // Step 1: Match manual auction values (primary source)
+  const result = matchManualValues(players);
 
-  // Step 2: Match ECR rankings to player IDs
-  const ecrById = new Map<string, { overallRank: number; positionRank: number }>();
-  if (rankings.length > 0) {
-    const lookup = new Map<string, { overallRank: number; positionRank: number }>();
-    for (const r of rankings) {
-      const { first, last } = splitNorm(r.playerName);
-      lookup.set(matchKey(first, last, r.position), {
-        overallRank: r.overallRank,
-        positionRank: r.positionRank,
-      });
-    }
-    for (const player of players) {
-      const { first, last } = splitNorm(player.fullName);
-      const entry = lookup.get(matchKey(first, last, player.position));
-      if (entry) ecrById.set(player.id, entry);
-    }
-    console.log(`[auctionValues] ECR matched ${ecrById.size} / ${players.length} players`);
-  }
-
-  // Step 3: Blend PAR + rank value per player
-  const blended: Record<string, number> = {};
-
+  // Step 2: Any player not in manual data gets $1
   for (const player of players) {
-    const par = parRaw[player.id];
-    const ecr = ecrById.get(player.id);
-    const rankVal = ecr ? rankToDollar(ecr.overallRank, maxPAR) : null;
-
-    if (par != null && rankVal != null) {
-      blended[player.id] = par * (1 - ECR_BLEND_ALPHA) + rankVal * ECR_BLEND_ALPHA;
-    } else if (rankVal != null) {
-      // Rookie or no historical stats — use rank value only
-      blended[player.id] = rankVal;
-    } else if (par != null) {
-      blended[player.id] = par;
+    if (result[player.id] === undefined) {
+      result[player.id] = 1;
     }
-    // Players with neither PAR nor ECR rank are excluded (get no value)
   }
 
-  // Step 4: Override with Yahoo values where available (real auction market data)
+  // Step 3: Override with Yahoo values if authenticated
   for (const [id, cost] of Object.entries(yahooValues)) {
-    blended[id] = cost;
+    result[id] = Math.max(1, cost);
   }
 
-  // Step 5: Normalize so max value = $61, floor at $1
-  return normalizeToMax(blended, MAX_AUCTION_VALUE);
+  return result;
 }
