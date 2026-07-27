@@ -325,10 +325,9 @@ const SCORING_LABELS: Record<ScoringFormat, string> = {
 
 // ── Auction price editor ───────────────────────────────────────────────────
 
-function AuctionSection({ playerId, leagueId, leagueName, budget, auctionRange }: {
+function AuctionSection({ playerId, leagueId, budget, auctionRange }: {
   playerId: string;
   leagueId: string;
-  leagueName: string;
   budget?: number;
   auctionRange?: AuctionRange | null;
 }) {
@@ -565,7 +564,6 @@ export function PlayerModal({ player, scoringFormat, scoringSettings, onClose }:
             <AuctionSection
               playerId={player.id}
               leagueId={activeLeagueId}
-              leagueName={activeLeague.name}
               budget={activeLeague.auctionBudget}
               auctionRange={auctionRange}
             />

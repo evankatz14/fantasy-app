@@ -1,8 +1,37 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Player, League, ListItem, FantasyPosition, PlayerSeasonStats } from '../types';
+import { MANUAL_AUCTION_VALUES } from '../data/manualAuctionValues';
 
 const PLAYERS_PER_TIER = 10;
+
+// Normalize a name for fuzzy matching against MANUAL_AUCTION_VALUES
+function normName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z ]/g, '').trim().replace(/\s+/g, ' ');
+}
+
+const POSITION_FALLBACK_PRIORITY: Record<string, number> = {
+  RB: 5, WR: 4, TE: 3, QB: 2, DEF: 1, K: 0,
+};
+
+// Build once at module load
+const AUCTION_VALUE_MAP = new Map<string, number>(
+  MANUAL_AUCTION_VALUES.map(e => [`${normName(e.name)}|${e.position}`, e.value]),
+);
+
+function sortPlayersByDefaultRanking(players: Player[]): Player[] {
+  return [...players].sort((a, b) => {
+    const valA = AUCTION_VALUE_MAP.get(`${normName(a.fullName)}|${a.position}`);
+    const valB = AUCTION_VALUE_MAP.get(`${normName(b.fullName)}|${b.position}`);
+    if (valA !== undefined && valB !== undefined) return valB - valA;
+    if (valA !== undefined) return -1;
+    if (valB !== undefined) return 1;
+    // Fallback: position priority, then depth chart order
+    const priDiff = (POSITION_FALLBACK_PRIORITY[b.position] ?? 0) - (POSITION_FALLBACK_PRIORITY[a.position] ?? 0);
+    if (priDiff !== 0) return priDiff;
+    return (a.depthChartPosition ?? 99) - (b.depthChartPosition ?? 99);
+  });
+}
 
 function arrayMove<T>(arr: T[], from: number, to: number): T[] {
   const result = [...arr];
@@ -122,7 +151,8 @@ export const useAppStore = create<AppState>()(
       initOrderedItems: (leagueId, players) => {
         const { orderedItems } = get();
         if (orderedItems[leagueId]?.length) return;
-        set({ orderedItems: { ...orderedItems, [leagueId]: buildInitialItems(players) } });
+        const sorted = sortPlayersByDefaultRanking(players);
+        set({ orderedItems: { ...orderedItems, [leagueId]: buildInitialItems(sorted) } });
       },
 
       moveItem: (leagueId, activeId, overId) => {

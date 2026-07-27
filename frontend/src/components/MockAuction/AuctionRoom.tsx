@@ -38,8 +38,8 @@ export function AuctionRoom({ onBack }: Props) {
   const {
     phase, teams, nominatedPlayerId, nominatorTeamId,
     currentBid, currentHighBidderTeamId, bidSequence,
-    availablePlayerIds, auctionLog, playerValues, playerValueRanges, lastAwarded,
-    startAuction, doNominate, humanNominate, placeBid, awardPlayer, resetAuction,
+    availablePlayerIds, auctionLog, playerValues, lastAwarded,
+    startAuction, humanNominate, placeBid, resetAuction,
   } = useAuctionStore();
 
   const activeLeague = leagues.find(l => l.id === activeLeagueId);
@@ -418,7 +418,6 @@ export function AuctionRoom({ onBack }: Props) {
               players={players}
               humanTeamId={HUMAN_TEAM_ID}
               auctionLog={auctionLog}
-              phase={phase}
             />
           </div>
         </div>

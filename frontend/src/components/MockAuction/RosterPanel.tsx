@@ -9,7 +9,6 @@ interface Props {
   players: Player[];
   humanTeamId: string;
   auctionLog: AuctionLogEntry[];
-  phase: string;
 }
 
 const SLOT_LABEL_COLOR: Record<string, string> = {
@@ -22,7 +21,7 @@ const SLOT_LABEL_COLOR: Record<string, string> = {
   BN: 'text-slate-500',
 };
 
-export function RosterPanel({ teams, players, humanTeamId, auctionLog, phase }: Props) {
+export function RosterPanel({ teams, players, humanTeamId, auctionLog }: Props) {
   const [selectedTeamId, setSelectedTeamId] = useState(humanTeamId);
   const [tab, setTab] = useState<'roster' | 'log' | 'budgets'>('roster');
 
