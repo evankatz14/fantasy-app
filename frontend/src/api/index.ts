@@ -2,7 +2,7 @@ import type { Player, League, PlayerSeasonStats, PlayerWeekStats, ScoringSetting
 
 // In dev, VITE_API_URL is unset and Vite's proxy handles /api → localhost:3001.
 // In production, VITE_API_URL is the Render backend URL (no trailing slash).
-const BASE = `${import.meta.env.VITE_API_URL ?? ''}/api`;
+const BASE = `${(import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')}/api`;
 
 export async function fetchPlayers(position?: string): Promise<Player[]> {
   const url = position ? `${BASE}/players?position=${position}` : `${BASE}/players`;
