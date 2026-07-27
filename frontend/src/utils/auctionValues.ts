@@ -1,6 +1,7 @@
 import type { Player, PlayerSeasonStats, ScoringFormat } from '../types';
 import type { PlayerRanking } from '../api';
 import { MANUAL_AUCTION_VALUES } from '../data/manualAuctionValues';
+import { YAHOO_AUCTION_VALUES } from '../data/yahooAuctionValues';
 
 // ── Name normalization (must match backend logic) ─────────────────────────────
 
@@ -109,13 +110,19 @@ function rankToDollar(rank: number, maxPAR: number): number {
   return maxPAR / Math.pow(rank, 0.6);
 }
 
-// ── Manual auction value matching ─────────────────────────────────────────────
+// ── Manual + Yahoo auction value matching ─────────────────────────────────────
 
-function matchManualValues(players: Player[]): Record<string, number> {
+export interface AuctionRange {
+  fpValue: number;
+  yahooValue: number | null;
+  low: number;
+  high: number;
+}
+
+function buildNameLookup(entries: typeof MANUAL_AUCTION_VALUES): { nameLookup: Map<string, number>; defLookup: Map<string, number> } {
   const nameLookup = new Map<string, number>();
-  const defLookup = new Map<string, number>(); // team abbrev → value
-
-  for (const entry of MANUAL_AUCTION_VALUES) {
+  const defLookup = new Map<string, number>();
+  for (const entry of entries) {
     if (entry.position === 'DEF') {
       defLookup.set(entry.team, entry.value);
     } else {
@@ -123,7 +130,11 @@ function matchManualValues(players: Player[]): Record<string, number> {
       nameLookup.set(matchKey(first, last, entry.position), entry.value);
     }
   }
+  return { nameLookup, defLookup };
+}
 
+function matchManualValues(players: Player[]): Record<string, number> {
+  const { nameLookup, defLookup } = buildNameLookup(MANUAL_AUCTION_VALUES);
   const result: Record<string, number> = {};
   for (const player of players) {
     if (player.position === 'DEF') {
@@ -135,7 +146,41 @@ function matchManualValues(players: Player[]): Record<string, number> {
       if (v !== undefined) result[player.id] = Math.max(1, v);
     }
   }
+  return result;
+}
 
+function matchYahooValues(players: Player[]): Record<string, number> {
+  const { nameLookup } = buildNameLookup(YAHOO_AUCTION_VALUES);
+  const result: Record<string, number> = {};
+  for (const player of players) {
+    if (player.position === 'DEF') continue; // no Yahoo DEF data
+    const { first, last } = splitNorm(player.fullName);
+    const v = nameLookup.get(matchKey(first, last, player.position));
+    if (v !== undefined) result[player.id] = Math.max(1, v);
+  }
+  return result;
+}
+
+/**
+ * Returns { fpValue, yahooValue, low, high } per player.
+ * low = min(fp, yahoo), high = max(fp, yahoo).
+ * Used for AI range-sampling and PlayerModal display.
+ */
+export function computeAuctionRanges(players: Player[]): Record<string, AuctionRange> {
+  const fpMap = matchManualValues(players);
+  const yahooMap = matchYahooValues(players);
+  const result: Record<string, AuctionRange> = {};
+  for (const player of players) {
+    const fp = fpMap[player.id];
+    if (fp === undefined) continue;
+    const yahoo = yahooMap[player.id] ?? null;
+    result[player.id] = {
+      fpValue: fp,
+      yahooValue: yahoo,
+      low:  yahoo != null ? Math.min(fp, yahoo) : fp,
+      high: yahoo != null ? Math.max(fp, yahoo) : fp,
+    };
+  }
   return result;
 }
 
@@ -153,22 +198,10 @@ export function computeAuctionValues(
   _stats: Record<string, PlayerSeasonStats>,
   _scoringFormat: ScoringFormat = 'half_ppr',
   _rankings: PlayerRanking[] = [],
-  yahooValues: Record<string, number> = {},
 ): Record<string, number> {
-  // Step 1: Match manual auction values (primary source)
   const result = matchManualValues(players);
-
-  // Step 2: Any player not in manual data gets $1
   for (const player of players) {
-    if (result[player.id] === undefined) {
-      result[player.id] = 1;
-    }
+    if (result[player.id] === undefined) result[player.id] = 1;
   }
-
-  // Step 3: Override with Yahoo values if authenticated
-  for (const [id, cost] of Object.entries(yahooValues)) {
-    result[id] = Math.max(1, cost);
-  }
-
   return result;
 }

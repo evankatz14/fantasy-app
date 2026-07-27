@@ -4,8 +4,8 @@ import type { Player, PlayerSeasonStats, PlayerWeekStats, ScoringFormat, Scoring
 import { calcCustomPpg, calcCustomWeekPts } from '../utils/scoring';
 import { useAppStore } from '../store/useAppStore';
 import { POSITION_COLORS } from './PositionFilter';
-import { usePlayerRankings } from '../hooks/usePlayerRankings';
-import { computeAuctionValues } from '../utils/auctionValues';
+import { computeAuctionRanges } from '../utils/auctionValues';
+import type { AuctionRange } from '../utils/auctionValues';
 
 interface Props {
   player: Player;
@@ -325,12 +325,12 @@ const SCORING_LABELS: Record<ScoringFormat, string> = {
 
 // ── Auction price editor ───────────────────────────────────────────────────
 
-function AuctionSection({ playerId, leagueId, leagueName, budget, auctionValue }: {
+function AuctionSection({ playerId, leagueId, leagueName, budget, auctionRange }: {
   playerId: string;
   leagueId: string;
   leagueName: string;
   budget?: number;
-  auctionValue?: number | null;
+  auctionRange?: AuctionRange | null;
 }) {
   const { auctionPrices, setAuctionPrice } = useAppStore();
   const saved = auctionPrices[leagueId]?.[playerId];
@@ -353,12 +353,26 @@ function AuctionSection({ playerId, leagueId, leagueName, budget, auctionValue }
 
   return (
     <div className="flex flex-col gap-3">
-      {auctionValue != null && (
-        <div className="flex items-center gap-4">
+      {auctionRange != null && (
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">Est. value</span>
-            <span className="text-sm font-semibold text-indigo-400">${auctionValue}</span>
+            <span className="text-xs text-slate-500">FP</span>
+            <span className="text-sm font-semibold text-indigo-400">${auctionRange.fpValue}</span>
           </div>
+          {auctionRange.yahooValue != null && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-500">Yahoo</span>
+              <span className="text-sm font-semibold text-purple-400">${auctionRange.yahooValue}</span>
+            </div>
+          )}
+          {auctionRange.high > auctionRange.low && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-500">AI range</span>
+              <span className="text-sm font-semibold text-emerald-400">
+                ${Math.round(auctionRange.low)}–${Math.round(auctionRange.high)}
+              </span>
+            </div>
+          )}
         </div>
       )}
     <div className="flex items-center gap-4">
@@ -412,15 +426,14 @@ function AuctionSection({ playerId, leagueId, leagueName, budget, auctionValue }
 }
 
 export function PlayerModal({ player, scoringFormat, scoringSettings, onClose }: Props) {
-  const { activeLeagueId, leagues, players: allPlayers, stats: allStats } = useAppStore();
+  const { activeLeagueId, leagues, players: allPlayers } = useAppStore();
   const activeLeague = leagues.find(l => l.id === activeLeagueId);
-  const rankings = usePlayerRankings(scoringFormat);
 
-  const auctionValues = useMemo(
-    () => computeAuctionValues(allPlayers, allStats, scoringFormat, rankings),
-    [allPlayers, allStats, scoringFormat, rankings],
+  const auctionRanges = useMemo(
+    () => computeAuctionRanges(allPlayers),
+    [allPlayers],
   );
-  const auctionValue = auctionValues[player.id] ?? null;
+  const auctionRange = auctionRanges[player.id] ?? null;
 
   const [seasons, setSeasons] = useState<PlayerSeasonStats[] | null>(null);
   const [seasonError, setSeasonError] = useState(false);
@@ -554,7 +567,7 @@ export function PlayerModal({ player, scoringFormat, scoringSettings, onClose }:
               leagueId={activeLeagueId}
               leagueName={activeLeague.name}
               budget={activeLeague.auctionBudget}
-              auctionValue={auctionValue}
+              auctionRange={auctionRange}
             />
           </div>
         )}

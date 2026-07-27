@@ -1,5 +1,5 @@
 export type ScoringFormat = 'standard' | 'half_ppr' | 'ppr';
-export type DraftType = 'snake' | 'auction';
+export type DraftType = 'snake' | 'auction' | 'keeper';
 
 export interface RosterSlots {
   QB: number;
@@ -10,6 +10,7 @@ export interface RosterSlots {
   DEF: number;
   FLEX: number;
   SFLEX: number;
+  BN: number;
 }
 
 export interface ScoringSettings {

@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { ScoringSettingsModal } from './ScoringSettingsModal';
+import { LeagueSettingsModal } from './LeagueSettingsModal';
 import type { League } from '../types';
 
 export function LeagueSwitcher() {
   const { leagues, activeLeagueId, setActiveLeague } = useAppStore();
-  const [editingLeague, setEditingLeague] = useState<League | null>(null);
+  const [editingLeague, setEditingLeague] = useState<League | null | undefined>(undefined);
+  // undefined = modal closed, null = new league mode, League = edit mode
 
   if (!leagues.length) return null;
 
   return (
     <>
-      <div className="flex gap-2 items-center">
+      <div className="flex gap-2 items-center flex-wrap">
         <span className="text-xs text-slate-500 uppercase tracking-wider">League:</span>
         {leagues.map((league) => (
           <div key={league.id} className="flex items-center">
@@ -27,7 +28,7 @@ export function LeagueSwitcher() {
             </button>
             <button
               onClick={() => setEditingLeague(league)}
-              title="Edit scoring settings"
+              title="League settings"
               className={`px-2 py-1.5 rounded-r-lg text-xs border-y border-r transition-all cursor-pointer ${
                 activeLeagueId === league.id
                   ? 'bg-indigo-700 border-indigo-500 text-indigo-200 hover:bg-indigo-600'
@@ -41,12 +42,24 @@ export function LeagueSwitcher() {
             </button>
           </div>
         ))}
+
+        {/* Add league */}
+        <button
+          onClick={() => setEditingLeague(null)}
+          title="Add a new league"
+          className="w-7 h-7 flex items-center justify-center rounded-lg border border-dashed border-slate-600 text-slate-500 hover:border-indigo-500/60 hover:text-slate-300 transition-all cursor-pointer"
+        >
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <line x1="6" y1="1" x2="6" y2="11" />
+            <line x1="1" y1="6" x2="11" y2="6" />
+          </svg>
+        </button>
       </div>
 
-      {editingLeague && (
-        <ScoringSettingsModal
+      {editingLeague !== undefined && (
+        <LeagueSettingsModal
           league={editingLeague}
-          onClose={() => setEditingLeague(null)}
+          onClose={() => setEditingLeague(undefined)}
         />
       )}
     </>

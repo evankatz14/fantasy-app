@@ -1,27 +1,56 @@
 import type { Player } from '../types';
 import type { AuctionTeam } from '../store/useAuctionStore';
 
-export type AIPersonality = 'aggressive' | 'balanced' | 'conservative';
+export type AIPersonality = 'aggressive' | 'balanced' | 'conservative' | 'boom_bust';
 
 export const PERSONALITY_FACTOR: Record<AIPersonality, number> = {
-  aggressive: 1.15,
-  balanced: 1.0,
-  conservative: 0.82,
+  aggressive: 1.08,
+  balanced: 0.97,
+  conservative: 0.78,
+  boom_bust: 1.40, // will pay way over value for elite players
 };
 
 // How quickly each personality reacts to bids (ms range)
 export const PERSONALITY_DELAY: Record<AIPersonality, [number, number]> = {
-  aggressive: [800, 3500],
-  balanced: [2000, 6000],
+  aggressive:   [800,  3500],
+  balanced:     [2000, 6000],
   conservative: [3500, 8000],
+  boom_bust:    [600,  2500], // decisive — knows what they want
 };
 
-// 11 AI teams: 3 aggressive, 5 balanced, 3 conservative
-export const AI_PERSONALITIES: AIPersonality[] = [
-  'aggressive', 'aggressive', 'aggressive',
-  'balanced', 'balanced', 'balanced', 'balanced', 'balanced',
-  'conservative', 'conservative', 'conservative',
-];
+const DROPOUT_CHANCE: Record<AIPersonality, number> = {
+  aggressive:   0.06,
+  balanced:     0.12,
+  conservative: 0.22,
+  boom_bust:    0.02, // rarely drops out on elite players; handled separately below
+};
+
+// Boom/bust value threshold — only goes all-in on players above this
+const BOOM_BUST_ELITE_THRESHOLD = 28;
+
+/** Randomize AI personalities for `count` teams. Proportions scale with count. */
+export function randomizePersonalities(count: number = 11): AIPersonality[] {
+  const pool: AIPersonality[] = [];
+  const aggressive = Math.max(1, 1 + Math.floor(Math.random() * 4));
+  const conservative = Math.max(1, 1 + Math.floor(Math.random() * 3));
+  const boom_bust = Math.floor(Math.random() * 3);
+  const balanced = Math.max(0, count - aggressive - conservative - boom_bust);
+
+  for (let i = 0; i < aggressive; i++) pool.push('aggressive');
+  for (let i = 0; i < balanced; i++) pool.push('balanced');
+  for (let i = 0; i < conservative; i++) pool.push('conservative');
+  for (let i = 0; i < boom_bust; i++) pool.push('boom_bust');
+
+  // Fill any remaining slots (small leagues) with 'balanced'
+  while (pool.length < count) pool.push('balanced');
+
+  // Shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, count);
+}
 
 /** Maximum bid this team can place while keeping $1 reserved per remaining empty slot */
 export function maxBid(team: AuctionTeam): number {
@@ -43,67 +72,87 @@ function positionNeedFactor(team: AuctionTeam, player: Player): number {
   return hasStarter ? 1.0 : 1.15;
 }
 
-// Chance to drop out early even under target value (simulates saving budget)
-const DROPOUT_CHANCE: Record<AIPersonality, number> = {
-  aggressive: 0.04,
-  balanced: 0.10,
-  conservative: 0.18,
-};
 
 /**
  * Returns the bid amount this AI team wants to place, or null if they pass.
  *
- * Bid sizing: large jumps when the current price is far below the AI's target
- * (to avoid slow $1 crawls on underpriced players), grinding $1-2 increments
- * only when close to the ceiling.
- *
- * Randomness comes from two sources:
- *  1. Per-call value variance (±20%) so the same AI evaluates the same player
- *     slightly differently each time — creating natural dropout and occasional
- *     overpay without being deterministic.
- *  2. A personality-weighted dropout chance so even aggressive teams sometimes
- *     fold early to conserve budget for later picks.
+ * When playerValueRanges is provided, the AI samples a market price from the
+ * FP/Yahoo range [low, high] instead of applying arbitrary variance. This creates
+ * data-driven price uncertainty — teams that sample near Yahoo value may bid high;
+ * teams that sample near FP value bid conservatively.
  */
 export function getAIBid(
   team: AuctionTeam,
   player: Player,
   currentBid: number,
   playerValues: Record<string, number>,
+  playerValueRanges?: Record<string, { low: number; high: number }>,
 ): number | null {
   const personality = team.personality as AIPersonality;
   const baseValue = playerValues[player.id] ?? 1;
-
-  // ±20% variance on this evaluation — AI opinion of the player fluctuates
-  const variance = 0.80 + Math.random() * 0.40;
-  const targetValue = Math.round(
-    baseValue * PERSONALITY_FACTOR[personality] * positionNeedFactor(team, player) * variance,
-  );
-
-  if (currentBid >= targetValue) return null;
-
   const affordable = maxBid(team);
   if (currentBid + 1 > affordable) return null;
 
-  // Budget-conservation dropout — even when they could bid, they sometimes pass
-  if (Math.random() < DROPOUT_CHANCE[personality]) return null;
+  const range = playerValueRanges?.[player.id];
+
+  // Sample a market value: range-based if available, variance-based otherwise
+  function sampleMarket(): number {
+    if (range && range.high > range.low) {
+      return range.low + Math.random() * (range.high - range.low);
+    }
+    return baseValue * (0.72 + Math.random() * 0.48); // [0.72, 1.20] fallback
+  }
+
+  // ── Boom/bust: go all-in on elite players, skip everyone else ────────────
+  if (personality === 'boom_bust') {
+    const eliteSlotsFilled = team.roster.filter(s => s.playerId !== null && !s.isBench).length;
+    if (baseValue < BOOM_BUST_ELITE_THRESHOLD || eliteSlotsFilled >= 3) {
+      if (Math.random() < 0.82) return null;
+    }
+    const marketValue = sampleMarket();
+    const rawTarget = marketValue * PERSONALITY_FACTOR['boom_bust'];
+    const cap = range ? range.high * 1.20 : baseValue * 1.50;
+    const targetValue = Math.round(Math.min(rawTarget, cap));
+    if (currentBid >= targetValue) return null;
+    if (Math.random() < DROPOUT_CHANCE['boom_bust']) return null;
+    const ratio = currentBid / targetValue;
+    let bidTo: number;
+    if (ratio < 0.50) {
+      bidTo = Math.round(targetValue * (0.50 + Math.random() * 0.20));
+    } else {
+      bidTo = currentBid + 1 + Math.floor(Math.random() * 2);
+    }
+    return Math.max(currentBid + 1, Math.min(bidTo, targetValue, affordable));
+  }
+
+  // ── Standard personalities ────────────────────────────────────────────────
+  const marketValue = sampleMarket();
+  const rawTarget = marketValue * PERSONALITY_FACTOR[personality] * positionNeedFactor(team, player);
+  // Cap: slight overpay allowed above the range high (or FP value when no range)
+  const cap = range ? range.high * 1.12 : baseValue * 1.20;
+  const targetValue = Math.round(Math.min(rawTarget, cap));
+
+  if (currentBid >= targetValue) return null;
+
+  // Budget pressure: teams running low drop out more aggressively
+  const budgetRatio = team.budget / (team.initialBudget || 200);
+  const budgetMultiplier = budgetRatio < 0.4 ? 2.0 : budgetRatio < 0.6 ? 1.4 : 1.0;
+
+  if (Math.random() < DROPOUT_CHANCE[personality] * budgetMultiplier) return null;
 
   // ── Bid sizing based on where the current price sits relative to target ──
   const ratio = currentBid / targetValue;
   let bidTo: number;
 
   if (ratio < 0.30) {
-    // Very underpriced: jump to 25–50% of target in one move
     bidTo = Math.round(targetValue * (0.25 + Math.random() * 0.25));
   } else if (ratio < 0.65) {
-    // Still underpriced: close 25–45% of the remaining gap
     const gap = targetValue - currentBid;
     bidTo = currentBid + Math.round(gap * (0.25 + Math.random() * 0.20));
   } else {
-    // Near ceiling: $1–3 increments
     bidTo = currentBid + 1 + Math.floor(Math.random() * 2);
   }
 
-  // Clamp: must exceed current bid; can't exceed target or budget floor
   return Math.max(currentBid + 1, Math.min(bidTo, targetValue, affordable));
 }
 

@@ -1,6 +1,6 @@
 export type FantasyPosition = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
 export type ScoringFormat = 'standard' | 'half_ppr' | 'ppr';
-export type DraftType = 'snake' | 'auction';
+export type DraftType = 'snake' | 'auction' | 'keeper';
 
 export interface Player {
   id: string;
@@ -26,6 +26,7 @@ export interface RosterSlots {
   DEF: number;
   FLEX: number;
   SFLEX: number;
+  BN: number;
 }
 
 export interface ScoringSettings {

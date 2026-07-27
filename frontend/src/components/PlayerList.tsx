@@ -27,10 +27,16 @@ export function PlayerList({ onMockAuction }: Props) {
   } = useAppStore();
 
   useEffect(() => {
-    fetchLeagues().then((data) => {
-      setLeagues(data);
-      if (!activeLeagueId && data.length) setActiveLeague(data[0].id);
-    });
+    if (leagues.length > 0) {
+      // Leagues already persisted locally — just ensure an active league is set
+      if (!activeLeagueId) setActiveLeague(leagues[0].id);
+    } else {
+      // First run (or post-migration): seed from backend defaults
+      fetchLeagues().then((data) => {
+        setLeagues(data);
+        if (!activeLeagueId && data.length) setActiveLeague(data[0].id);
+      });
+    }
   }, []);
 
   useEffect(() => {

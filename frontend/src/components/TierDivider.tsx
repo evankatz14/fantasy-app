@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { useAppStore } from '../store/useAppStore';
 
 interface Props {
@@ -19,11 +18,11 @@ export function TierDivider({ id, name, leagueId, tierNumber }: Props) {
   const [draft, setDraft] = useState(displayName);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const { attributes, listeners, setNodeRef, isDragging } = useSortable({ id });
 
+  // Don't apply dnd-kit's CSS transform: the virtualizer positions items absolutely,
+  // so sortable transforms on the inner div cause overlaps. DragOverlay handles visuals.
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
     opacity: isDragging ? 0.4 : 1,
   };
 

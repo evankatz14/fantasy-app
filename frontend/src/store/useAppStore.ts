@@ -47,6 +47,9 @@ interface AppState {
   setPlayers: (players: Player[]) => void;
   setLeagues: (leagues: League[]) => void;
   setActiveLeague: (id: string) => void;
+  addLeague: (data: Omit<League, 'id'>) => League;
+  updateLeague: (id: string, updates: Partial<Omit<League, 'id'>>) => void;
+  deleteLeague: (id: string) => void;
   setPositionFilter: (pos: FantasyPosition | 'ALL') => void;
   setStats: (stats: Record<string, PlayerSeasonStats>) => void;
   toggleShowStats: () => void;
@@ -83,6 +86,25 @@ export const useAppStore = create<AppState>()(
       setPlayers: (players) => set({ players }),
       setLeagues: (leagues) => set({ leagues }),
       setActiveLeague: (id) => set({ activeLeagueId: id }),
+
+      addLeague: (data) => {
+        const league: League = { id: `league-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, ...data };
+        set((s) => ({ leagues: [...s.leagues, league] }));
+        return league;
+      },
+
+      updateLeague: (id, updates) => {
+        set((s) => ({ leagues: s.leagues.map((l) => (l.id === id ? { ...l, ...updates } : l)) }));
+      },
+
+      deleteLeague: (id) => {
+        set((s) => {
+          const leagues = s.leagues.filter((l) => l.id !== id);
+          const activeLeagueId = s.activeLeagueId === id ? (leagues[0]?.id ?? null) : s.activeLeagueId;
+          return { leagues, activeLeagueId };
+        });
+      },
+
       setPositionFilter: (pos) => set({ positionFilter: pos }),
       setStats: (stats) => set({ stats }),
       toggleShowStats: () => set((s) => ({ showStats: !s.showStats })),
@@ -176,8 +198,16 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'fantasy-rankings',
-      version: 2, // bumped from Phase 1 to clear old rankings format
+      version: 3,
+      migrate: (persisted: any, version: number) => {
+        if (version < 3) {
+          // Leagues are now persisted locally; reset to seed fresh from API
+          return { ...persisted, leagues: [], orderedItems: {}, activeLeagueId: null };
+        }
+        return persisted;
+      },
       partialize: (state) => ({
+        leagues: state.leagues,
         orderedItems: state.orderedItems,
         activeLeagueId: state.activeLeagueId,
         positionFilter: state.positionFilter,

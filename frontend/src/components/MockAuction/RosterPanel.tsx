@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Player } from '../../types';
 import type { AuctionTeam, AuctionLogEntry } from '../../store/useAuctionStore';
+import { maxBid } from '../../utils/auctionAI';
 import { POSITION_COLORS } from '../PositionFilter';
 
 interface Props {
@@ -23,7 +24,7 @@ const SLOT_LABEL_COLOR: Record<string, string> = {
 
 export function RosterPanel({ teams, players, humanTeamId, auctionLog, phase }: Props) {
   const [selectedTeamId, setSelectedTeamId] = useState(humanTeamId);
-  const [tab, setTab] = useState<'roster' | 'log'>('roster');
+  const [tab, setTab] = useState<'roster' | 'log' | 'budgets'>('roster');
 
   const playerMap = new Map(players.map(p => [p.id, p]));
   const teamMap = new Map(teams.map(t => [t.id, t]));
@@ -62,7 +63,7 @@ export function RosterPanel({ teams, players, humanTeamId, auctionLog, phase }: 
 
       {/* Tabs */}
       <div className="flex-none flex gap-1 mb-3">
-        {(['roster', 'log'] as const).map(t => (
+        {(['roster', 'log', 'budgets'] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -70,14 +71,50 @@ export function RosterPanel({ teams, players, humanTeamId, auctionLog, phase }: 
               tab === t ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            {t === 'roster' ? 'Roster' : 'Auction Log'}
+            {t === 'roster' ? 'Roster' : t === 'log' ? 'Log' : 'Budgets'}
           </button>
         ))}
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'roster' ? (
+        {tab === 'budgets' ? (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs text-slate-600 px-1 pb-1 mb-1 border-b border-slate-700/40">
+              <span>Team</span>
+              <div className="flex gap-4">
+                <span className="w-12 text-right">Budget</span>
+                <span className="w-12 text-right">Max bid</span>
+              </div>
+            </div>
+            {[...teams]
+              .sort((a, b) => b.budget - a.budget)
+              .map(team => {
+                const mb = maxBid(team);
+                const isHuman = team.id === humanTeamId;
+                return (
+                  <div
+                    key={team.id}
+                    className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs ${
+                      isHuman ? 'bg-emerald-900/20 border border-emerald-700/30' : 'bg-slate-800/40 border border-slate-700/20'
+                    }`}
+                  >
+                    <div className="flex items-center flex-1 min-w-0">
+                      <span className={`truncate ${isHuman ? 'text-emerald-300 font-semibold' : 'text-slate-300'}`}>
+                        {isHuman ? '⭐ ' : ''}{team.name}
+                      </span>
+                    </div>
+                    <div className="flex gap-4 shrink-0">
+                      <span className={`w-12 text-right font-semibold ${team.budget < 20 ? 'text-red-400' : 'text-emerald-400'}`}>
+                        ${team.budget}
+                      </span>
+                      <span className="w-12 text-right text-slate-400">${mb}</span>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        ) : tab === 'roster' ? (
           <div className="space-y-1">
             {selectedTeam.roster.map((slot, i) => {
               const player = slot.playerId ? playerMap.get(slot.playerId) : null;
@@ -157,3 +194,4 @@ export function RosterPanel({ teams, players, humanTeamId, auctionLog, phase }: 
     </div>
   );
 }
+

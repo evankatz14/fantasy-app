@@ -1,5 +1,4 @@
 import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { PlayerCard } from './PlayerCard';
 import type { Player, PlayerSeasonStats, ScoringFormat, ScoringSettings } from '../types';
 import type { AuctionPrice } from '../store/useAppStore';
@@ -19,11 +18,12 @@ interface Props {
 }
 
 export function SortablePlayerCard({ id, player, rank, tier, stats, scoringFormat, scoringSettings, auctionPrice, showStats, onAddTierBelow, onPlayerClick }: Props) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const { attributes, listeners, setNodeRef, isDragging } = useSortable({ id });
 
+  // Don't apply dnd-kit's CSS transform: items are absolutely positioned by the virtualizer,
+  // and shifting the inner div causes visual overlaps with adjacent outer wrappers.
+  // DragOverlay handles the dragged item's visual position instead.
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
     opacity: isDragging ? 0.35 : 1,
     zIndex: isDragging ? 50 : undefined,
   };

@@ -20,24 +20,14 @@ const HALF_PPR_6PT: ScoringSettings = {
 
 const DEFAULT_LEAGUES: League[] = [
   {
-    id: 'league-superflex',
-    name: '10-Team Superflex',
-    teamCount: 10,
-    scoringFormat: 'half_ppr',
-    draftType: 'snake',
-    superflex: true,
-    rosterSlots: { QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DEF: 1, FLEX: 2, SFLEX: 1 },
-    scoringSettings: HALF_PPR_6PT,
-  },
-  {
-    id: 'league-auction',
-    name: '12-Team Auction',
+    id: 'league-default',
+    name: 'My League',
     teamCount: 12,
     scoringFormat: 'half_ppr',
     draftType: 'auction',
     superflex: false,
     auctionBudget: 200,
-    rosterSlots: { QB: 1, RB: 2, WR: 2, TE: 1, K: 0, DEF: 0, FLEX: 1, SFLEX: 0 },
+    rosterSlots: { QB: 1, RB: 2, WR: 2, TE: 1, K: 0, DEF: 0, FLEX: 1, SFLEX: 0, BN: 7 },
     scoringSettings: HALF_PPR_4PT,
   },
 ];

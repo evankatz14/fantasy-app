@@ -17,14 +17,16 @@ interface Props {
   scoringFormat: ScoringFormat;
   lastAwarded: { player: Player; winner: AuctionTeam; price: number } | null;
   isSkipping: boolean;
+  nominationTimeLeft: number;
   onPlaceBid: (amount: number) => void;
   onSkip: () => void;
+  onPlayerClick: (player: Player) => void;
 }
 
 export function BiddingPanel({
   phase, nominatedPlayer, currentBid, highBidder, nominator,
   humanTeam, humanMaxBid, timeLeft, playerValue, stats, scoringFormat,
-  lastAwarded, isSkipping, onPlaceBid, onSkip,
+  lastAwarded, isSkipping, nominationTimeLeft, onPlaceBid, onSkip, onPlayerClick,
 }: Props) {
   const [customBid, setCustomBid] = useState('');
 
@@ -81,6 +83,28 @@ export function BiddingPanel({
     );
   }
 
+  // ── Waiting for human to nominate ────────────────────────────────────────
+  if (phase === 'nominating') {
+    const nomTimerColor = nominationTimeLeft <= 5 ? 'text-red-400' : nominationTimeLeft <= 10 ? 'text-yellow-400' : 'text-indigo-300';
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-5 text-center px-4">
+        <div>
+          <div className="text-lg font-bold text-white mb-1">Your Nomination</div>
+          <p className="text-slate-400 text-sm">
+            Pick any player from the list to put up for auction.
+          </p>
+        </div>
+        <div className="flex flex-col items-center gap-1">
+          <div className={`text-5xl font-bold tabular-nums ${nomTimerColor}`}>{nominationTimeLeft}s</div>
+          <div className="text-xs text-slate-600">auto-selects when time runs out</div>
+        </div>
+        <div className="text-xs text-slate-600">
+          ${humanTeam.budget} remaining · {humanTeam.roster.filter(s => s.playerId === null).length} spots left
+        </div>
+      </div>
+    );
+  }
+
   // ── Idle / no player nominated yet ───────────────────────────────────────
   if (phase === 'idle' || !nominatedPlayer) {
     return (
@@ -97,9 +121,15 @@ export function BiddingPanel({
   return (
     <div className="flex flex-col gap-4 h-full">
       {/* Nominated player */}
-      <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-        <div className="text-xs text-slate-500 mb-2 uppercase tracking-wider">
-          Up for bid · nominated by {nominator?.name ?? '—'}
+      <div
+        onClick={() => onPlayerClick(nominatedPlayer)}
+        className="bg-slate-800 rounded-xl p-4 border border-slate-700 cursor-pointer hover:border-slate-500 hover:bg-slate-700/80 transition-colors group"
+      >
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs text-slate-500 uppercase tracking-wider">
+            Up for bid · nominated by {nominator?.name ?? '—'}
+          </div>
+          <span className="text-xs text-slate-600 group-hover:text-slate-400 transition-colors">details →</span>
         </div>
         <div className="flex items-center gap-3">
           <span className={`text-sm font-bold px-2 py-1 rounded border shrink-0 ${posColor}`}>

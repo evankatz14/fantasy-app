@@ -108,12 +108,38 @@ export function RankingBoard() {
     return map;
   }, [leagueItems]);
 
+  const playerRowH = showStats ? 70 : 52;
+
+  const estimateSize = useCallback(
+    (i: number) => (visibleItems[i]?.type === 'tier' ? 36 : playerRowH),
+    [visibleItems, playerRowH],
+  );
+
+  // Key the measurement cache by item ID instead of index.
+  // Without this, a drag that moves item X from index 5 to index 3 leaves the
+  // cache saying "index 3 is 50px" — but index 3 is now a tier (36px), causing
+  // the extra-space / overlap bug the user reported.
+  const getItemKey = useCallback(
+    (i: number) => visibleItems[i]?.id ?? i,
+    [visibleItems],
+  );
+
   const virtualizer = useVirtualizer({
     count: visibleItems.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: (i) => (visibleItems[i]?.type === 'tier' ? 42 : 50),
+    estimateSize,
     overscan: 15,
+    getItemKey,
   });
+
+  // Freeze ResizeObserver measurements while dragging so mid-drag position
+  // recalculations can't shift items under the cursor.
+  const measureRef = useCallback(
+    (el: HTMLElement | null) => {
+      if (el && !activeId) virtualizer.measureElement(el);
+    },
+    [activeId, virtualizer],
+  );
 
   const activeItem = activeId ? visibleItems.find((i) => i.id === activeId) : null;
   const activePlayer =
@@ -167,7 +193,7 @@ export function RankingBoard() {
                 <div
                   key={item.id}
                   data-index={vRow.index}
-                  ref={virtualizer.measureElement}
+                  ref={measureRef}
                   style={{
                     position: 'absolute',
                     top: 0,
