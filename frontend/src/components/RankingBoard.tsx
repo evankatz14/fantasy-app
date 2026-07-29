@@ -84,29 +84,29 @@ export function RankingBoard() {
     return map;
   }, [visibleItems]);
 
-  // Tier: count of dividers above this player in the FULL league list
+  // Tier: count of dividers above this player in the VISIBLE list (resets per filtered view)
   const tierMap = useMemo(() => {
     const map = new Map<string, number>();
     let tier = 1;
-    for (const item of leagueItems) {
+    for (const item of visibleItems) {
       if (item.type === 'tier') tier++;
       else map.set(item.id, tier);
     }
     return map;
-  }, [leagueItems]);
+  }, [visibleItems]);
 
-  // Tier number for each divider — computed from full list so badges are consistent across views
+  // Tier number for each divider — relative to visible list so filtered views start at Tier 2
   const tierNumberMap = useMemo(() => {
     const map = new Map<string, number>();
     let count = 0;
-    for (const item of leagueItems) {
+    for (const item of visibleItems) {
       if (item.type === 'tier') {
         count++;
         map.set(item.id, count + 1);
       }
     }
     return map;
-  }, [leagueItems]);
+  }, [visibleItems]);
 
   const playerRowH = showStats ? 70 : 52;
 
